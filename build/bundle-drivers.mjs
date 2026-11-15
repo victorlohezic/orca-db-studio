@@ -1,4 +1,4 @@
-// Bundles pg and mysql2 into vendor/ with esbuild and writes license notices. Run via `npm run build`.
+// Bundles pg, mysql2, tedious and CodeMirror into vendor/ with esbuild and writes license notices. Run via `npm run build`.
 // Fails when a plugin file is over 1 MiB or a frame bundle contains eval or new Function.
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -14,8 +14,18 @@ const SKIP_DIRS = new Set(['node_modules', '.git', '.orca', 'dist', 'coverage'])
 const BUNDLES = [
   { name: 'pg', kind: 'worker' },
   { name: 'mysql2', kind: 'worker' },
+  { name: 'tedious', kind: 'worker', alias: azureStub() },
   { name: 'codemirror', kind: 'frame' },
 ]
+
+// tedious requires the Azure SDK for Entra ID sign-in and Key Vault, which DB Studio does not
+// offer; the real one would put vendor/tedious.js over 1 MiB (ADR 0006).
+function azureStub() {
+  const stub = join(ROOT, 'build', 'azure-stub.cjs')
+  return Object.fromEntries(
+    ['@azure/identity', '@azure/core-auth', '@azure/keyvault-keys'].map((name) => [name, stub]),
+  )
+}
 
 // CommonJS dependencies call require() on Node built-ins, which ESM output lacks.
 const REQUIRE_BANNER =
@@ -31,7 +41,7 @@ function fail(message) {
   process.exit(1)
 }
 
-async function bundle({ name, kind }) {
+async function bundle({ name, kind, alias = {} }) {
   const worker = kind === 'worker'
   const result = await build({
     entryPoints: [join(ENTRIES, `${name}.ts`)],
@@ -51,6 +61,7 @@ async function bundle({ name, kind }) {
     // pg loads the optional native binding in a try/catch; the plugin never ships it.
     external: worker ? ['pg-native', 'cloudflare:sockets'] : [],
     banner: worker ? { js: REQUIRE_BANNER } : {},
+    alias,
   })
   return result.metafile
 }

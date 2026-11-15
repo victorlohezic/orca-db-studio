@@ -49,6 +49,7 @@
     "mysql2": "^3.24.6",
     "pg": "^8.23.1",
     "pg-cursor": "^2.22.1",
+    "tedious": "^20.3.9",
     "testcontainers": "^12.2.1",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
