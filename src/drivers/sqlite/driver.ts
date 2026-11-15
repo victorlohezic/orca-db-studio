@@ -146,6 +146,10 @@ class SqliteSession implements Session {
     return `"${name.replaceAll('"', '""')}"`
   }
 
+  tableQuery(schema: string, table: string, limit: number): string {
+    return `SELECT * FROM ${this.quoteIdent(schema)}.${this.quoteIdent(table)} LIMIT ${limit}`
+  }
+
   async close(): Promise<void> {
     const thread = this.#thread
     this.#thread = undefined

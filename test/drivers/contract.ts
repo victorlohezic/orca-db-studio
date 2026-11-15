@@ -87,6 +87,13 @@ export function driverContract(name: string, target: ContractTarget): void {
       expect(await run(session, `SELECT id FROM ${table}`)).toEqual([[7]])
     })
 
+    test('previews a table with the query opening it writes', async () => {
+      const name = typeof target.schema === 'function' ? target.schema() : target.schema
+      await run(session, "INSERT INTO items (id, name) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
+      const rows = await run(session, session.tableQuery(name, 'items', 2))
+      expect(rows).toHaveLength(2)
+    })
+
     test('cancel stops a running query and the session keeps working', async () => {
       // Caught at once, and from query() too: a server may only answer once the statement is done.
       const failure = session

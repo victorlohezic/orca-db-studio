@@ -26,6 +26,8 @@ export interface Session {
   query(sql: string, opts: QueryOptions): Promise<QueryCursor>
   cancel(queryId: string): Promise<void>
   quoteIdent(name: string): string
+  /** The statement that previews a table's first `limit` rows: what opening a table writes. */
+  tableQuery(schema: string, table: string, limit: number): string
   close(): Promise<void>
 }
 

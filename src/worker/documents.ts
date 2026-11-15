@@ -113,15 +113,14 @@ export async function openTable(
   connections: Connections,
   input: OpenTableInput,
 ): Promise<OpenDocumentResult> {
-  const schema = await connections.quoteIdent(input.ref, input.schema)
-  const table = await connections.quoteIdent(input.ref, input.table)
+  const sql = await connections.tableQuery(input.ref, input.schema, input.table, TABLE_QUERY_LIMIT)
   // A worktree connection's document belongs in the worktree the connection was read from.
   const workspaceId = input.workspaceId ?? parseWorktreeRef(input.ref)?.workspaceId
   return openDocument(
     orca,
     workspaceId,
     fileStem(input.table),
-    `-- db-studio: connection=${input.ref}\nSELECT * FROM ${schema}.${table} LIMIT ${TABLE_QUERY_LIMIT}\n`,
+    `-- db-studio: connection=${input.ref}\n${sql}\n`,
   )
 }
 

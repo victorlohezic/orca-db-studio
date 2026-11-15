@@ -32,7 +32,7 @@ export interface Connections {
   listObjects(ref: string): Promise<SchemaTree>
   listColumns(ref: string): Promise<ColumnTree>
   dialect(ref: string): Promise<SqlDialect>
-  quoteIdent(ref: string, name: string): Promise<string>
+  tableQuery(ref: string, schema: string, table: string, limit: number): Promise<string>
   runQuery(ref: string, sql: string, options: RunOptions): Promise<QueryResult>
   cancelQuery(documentId: string): Promise<void>
   queryCell(documentId: string, row: number, column: number): CellValue
@@ -145,8 +145,8 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     async dialect(ref) {
       return (await sessionFor(ref)).dialect
     },
-    async quoteIdent(ref, name) {
-      return (await sessionFor(ref)).quoteIdent(name)
+    async tableQuery(ref, schema, table, limit) {
+      return (await sessionFor(ref)).tableQuery(schema, table, limit)
     },
     async runQuery(ref, sql, options) {
       return engine.run(await sessionFor(ref), sql, options)
