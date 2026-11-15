@@ -1,8 +1,8 @@
-# PRD: DB Studio for Orca (PostgreSQL · MySQL · SQLite)
+# PRD: DB Studio for Orca (PostgreSQL · MySQL · SQL Server · SQLite)
 
 ## Summary
 
-DB Studio is an Orca plugin for working with PostgreSQL, MySQL/MariaDB and SQLite without leaving Orca: browse a database's tables, open one, and run SQL against it from an editor tab. Later versions give Orca's agents safe, visible access to the database.
+DB Studio is an Orca plugin for working with PostgreSQL, MySQL/MariaDB, SQL Server and SQLite without leaving Orca: browse a database's tables, open one, and run SQL against it from an editor tab. Later versions give Orca's agents safe, visible access to the database.
 
 Terms in this document follow `GLOSSARY.md`.
 
@@ -19,7 +19,7 @@ The result: Orca users keep TablePlus, DBeaver or `psql` open on the side, and a
 ## Goals
 
 1. **Look at a database without leaving Orca:** connect, see its tables, open one, run a query. This is the MVP.
-2. **One model for three engines:** same UI and features everywhere; engine differences stay inside the driver.
+2. **One model for every engine:** same UI and features everywhere; engine differences stay inside the driver.
 3. **Per-worktree databases:** each worktree's own database, read from its `.env`, with nothing to configure.
 4. **Safe agent access (v1):** Orca's agents query the database over MCP, read-only by default. The activity log of what they ran follows in v2 (A4).
 5. **Publishable in the Orca plugin directory**, as a public project (`oscarbotteri/orca-db-studio`) once the MVP works.
@@ -29,7 +29,8 @@ The result: Orca users keep TablePlus, DBeaver or `psql` open on the side, and a
 - Server administration: creating instances, users, backups, replicas.
 - Cloud console integrations (Azure, AWS RDS, etc.) beyond reading credentials.
 - Schema migrations or diffs between databases.
-- Non-relational engines (MongoDB, Redis) and other SQL engines (SQL Server, Oracle).
+- Non-relational engines (MongoDB, Redis) and other SQL engines (Oracle).
+- Microsoft Entra ID (Azure AD), managed identity and integrated Windows sign-in for SQL Server: SQL logins only (ADR 0006).
 - A built-in "chat with your database": Orca's agents cover that through MCP.
 - Guard rails for the person in the MVP: no read-only mode, environment labels or write confirmations. Whoever uses the plugin is responsible for what they run.
 
@@ -61,16 +62,16 @@ Opening a table is not a separate view: it is a query document prefilled with a 
 
 ## Functional requirements
 
-`MVP` is the first release; `v1`, `v2` and `v3` follow in that order. Every requirement applies to all three engines unless stated otherwise.
+`MVP` is the first release; `v1`, `v2` and `v3` follow in that order. Every requirement applies to all engines unless stated otherwise.
 
 | ID  | Area         | Requirement                                                                                                               | Version |
 | --- | ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------- |
-| C1  | Connections  | Create, edit, test and delete PostgreSQL, MySQL/MariaDB and SQLite connections; passwords only in Orca's secrets store    | MVP     |
-| C2  | Connections  | Paste a connection string (`postgres://`, `mysql://`) and prefill the form                                                | MVP     |
+| C1  | Connections  | Create, edit, test and delete PostgreSQL, MySQL/MariaDB, SQL Server and SQLite connections; passwords only in Orca's secrets store | MVP (SQL Server: v1) |
+| C2  | Connections  | Paste a connection string (`postgres://`, `mysql://`, `sqlserver://`, `mssql://`, `jdbc:sqlserver://`) and prefill the form | MVP (SQL Server: v1) |
 | C3  | Connections  | Save a SQLite file as a connection from the connection form: pick one found in the workspaces or paste a path            | MVP     |
 | C4  | Connections  | Worktree connection: read `DATABASE_URL` (or a configurable variable) from each worktree's `.env` / `.env.local` and list it in the panel | MVP     |
 | C5  | Connections  | Environment label (`local`, `dev`, `staging`, `prod`) shown as a colored tab                                              | v1      |
-| C6  | Connections  | SSL/TLS modes and certificates; SSH tunnel                                                                                | v2      |
+| C6  | Connections  | SSL/TLS modes and certificates; SSH tunnel. SQL Server's encryption (not encrypted, encrypted, encrypted with the certificate checked) comes first, with its driver | v2 (SQL Server: v1) |
 | C7  | Connections  | Credentials from AWS Secrets Manager / RDS IAM auth                                                                       | v3      |
 | E1  | Explorer     | Tree in the panel: connection → database → schema → tables and views                                                      | MVP     |
 | E2  | Explorer     | Search objects by name and type without expanding the tree                                                                | v2      |
@@ -121,7 +122,7 @@ Opening a table is not a separate view: it is a query document prefilled with a 
 
 **Compatibility**
 
-- PostgreSQL 13+, MySQL 8+, MariaDB 10.6+, SQLite 3.40+.
+- PostgreSQL 13+, MySQL 8+, MariaDB 10.6+, SQL Server 2017+ and Azure SQL Database, SQLite 3.40+.
 - macOS, Windows and Linux, same as Orca.
 
 **Quality**

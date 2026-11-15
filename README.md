@@ -5,7 +5,7 @@
 <h1 align="center">DB Studio for Orca</h1>
 
 <p align="center">
-  Browse and query PostgreSQL, MySQL/MariaDB and SQLite without leaving <a href="https://github.com/stablyai/orca">Orca</a>.
+  Browse and query PostgreSQL, MySQL/MariaDB, SQL Server and SQLite without leaving <a href="https://github.com/stablyai/orca">Orca</a>.
 </p>
 
 <p align="center">
@@ -29,13 +29,13 @@ DB Studio is an [Orca](https://github.com/stablyai/orca) plugin for looking at a
 
 If you run several agents in parallel, each in its own worktree, you probably keep TablePlus, DBeaver or `psql` open next to Orca just to check what an agent left in a table. DB Studio replaces that window switch: connect, see the tables, click one, edit the query, run it.
 
-It works the same on **PostgreSQL**, **MySQL/MariaDB** and **SQLite**.
+It works the same on **PostgreSQL**, **MySQL/MariaDB**, **SQL Server** and **SQLite**.
 
 ## Why another database client?
 
 - **It lives in Orca.** No second window, and no copying connection strings around.
 - **It understands worktrees.** Each Orca workspace can point at its own database. If a workspace's `.env` (or `.env.local`) defines `DATABASE_URL`, DB Studio offers that database, grouped by workspace. Nothing to configure, and the URL is never copied: it is read from the `.env` every time you use it.
-- **One model for three engines.** Same panel, same editor, same grid. Engine differences stay inside the drivers.
+- **One model for every engine.** Same panel, same editor, same grid. Engine differences stay inside the drivers.
 - **Safe by default.** Passwords live only in Orca's secrets store, never in logs or plain storage. Results are always cut off at a ceiling, so a careless query cannot flood the tab or Orca's memory.
 
 ## How it works
@@ -43,7 +43,7 @@ It works the same on **PostgreSQL**, **MySQL/MariaDB** and **SQLite**.
 1. Open the **DB Studio** panel in Orca's sidebar.
 2. Pick a connection: one you saved (a server or a SQLite file), or a worktree connection read from a `.env`.
 3. Expand it into databases, schemas, tables and views.
-4. Click a table. A query document opens with `SELECT * FROM <table> LIMIT 100` and runs it.
+4. Click a table. A query document opens with `SELECT * FROM <table> LIMIT 100` (`SELECT TOP 100 * FROM <table>` on SQL Server) and runs it.
 5. Edit the SQL, run the statement under the cursor (or the selection) with <kbd>Cmd/Ctrl</kbd>+<kbd>Enter</kbd>, and read the result in the grid below.
 
 Every tab is a plain `.sql` file whose first line names its connection:
@@ -59,12 +59,15 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 
 **Connections**
 
-- PostgreSQL, MySQL/MariaDB and SQLite, from a form or a pasted connection string (`postgres://`, `mysql://`).
-- Connect to managed PostgreSQL such as Neon over SSL: `sslmode` in a pasted connection string or a worktree `.env` turns it on, and `sslmode=disable` turns it off. The connection is encrypted, but the server certificate is not verified yet, so `verify-ca` and `verify-full` behave like `require`.
+- PostgreSQL, MySQL/MariaDB, SQL Server and SQLite, from a form or a pasted connection string (`postgres://`, `mysql://`, `sqlserver://`, `mssql://`, or a `jdbc:sqlserver://` string from a Spring project).
+- Connect to managed PostgreSQL such as Neon over SSL: known managed hosts are encrypted by default, and `sslmode` in a pasted connection string or a worktree `.env` overrides it. `disable` stays plain, `require` and `prefer` encrypt without checking the server certificate, and `verify-ca` and `verify-full` check it.
+- SQL Server connections choose their encryption: not encrypted (a local Docker server), encrypted, or encrypted with the certificate checked (Azure SQL, the default).
 - Test, edit and delete saved connections.
 - SQLite files saved as connections from the same form, picked from those found in your workspaces or pasted by path.
 - Tag a saved connection with an environment (local, dev, staging, prod). Its query documents show a colored band and a badge in the toolbar, and the panel row names it. Worktree connections cannot be tagged.
 - Worktree connections read from each workspace's `.env` / `.env.local`.
+
+SQL Server signs in with a SQL login only: no Microsoft Entra ID, managed identity or Windows sign-in ([ADR 0006](docs/adr/0006-sql-server-driver-tedious.md)). `GO` is a sqlcmd / SSMS command, not T-SQL, so a script that contains it fails. Its `DECIMAL`, `NUMERIC` and `MONEY` values are exact up to 15 significant digits.
 
 **Explorer**
 
@@ -92,10 +95,10 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 A database client is only useful if you can trust it with a large table or a slow query. These are the guarantees DB Studio is built around, and where each one is checked.
 
 - **Rows are streamed, never loaded whole.** Every driver reads through a cursor and stops at the row limit or the result ceiling. `SELECT * FROM events` on a table with millions of rows reads 101 rows, not millions. ([Query results](docs/system-architecture.md#query-results))
-- **Cancel reaches the database.** PostgreSQL gets `pg_cancel_backend`, MySQL/MariaDB get `KILL QUERY`, and a SQLite query's thread is stopped. The connection keeps working afterwards. ([Driver interface](docs/system-architecture.md#driver-interface))
+- **Cancel reaches the database.** PostgreSQL gets `pg_cancel_backend`, MySQL/MariaDB get `KILL QUERY`, SQL Server gets a TDS attention, and a SQLite query's thread is stopped. The connection keeps working afterwards. ([Driver interface](docs/system-architecture.md#driver-interface))
 - **A slow SQLite query never freezes Orca.** `node:sqlite` is synchronous, so each SQLite session runs in its own thread. ([ADR 0004](docs/adr/0004-sqlite-thread-loaded-by-node.md))
 - **Values arrive exactly as stored.** Large integers and decimals travel as strings, so `9007199254740993` does not become `9007199254740992`.
-- **Tested against real engines.** The same driver contract runs in CI against PostgreSQL, MySQL and MariaDB containers and SQLite files. ([`test/drivers/`](test/drivers/))
+- **Tested against real engines.** The same driver contract runs in CI against PostgreSQL, MySQL, MariaDB and SQL Server containers and SQLite files. ([`test/drivers/`](test/drivers/))
 - **Ready for Orca's plugin directory.** The drivers are pure JavaScript with no native modules, every file stays under 1 MiB, and CI fails if `vendor/` differs from a fresh build of the committed source in `build/`.
 
 ## Roadmap
@@ -126,11 +129,11 @@ Then open the **DB Studio** panel in Orca's sidebar.
 
 ### Settings
 
-| Setting                 | Default        | What it does                                                                                    |
-| ----------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
-| Connection variable     | `DATABASE_URL` | Variable read from each worktree's `.env` to offer its connection                               |
-| Query timeout (seconds) | `30`           | The server ends a statement after this long (1 to 110)                                          |
-| Row limit               | `100`          | Rows shown for a query without its own `LIMIT` (results never exceed 5000 rows or about 900 KB) |
+| Setting                 | Default        | What it does                                                                                             |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+| Connection variable     | `DATABASE_URL` | Variable read from each worktree's `.env` to offer its connection                                        |
+| Query timeout (seconds) | `30`           | The server ends a statement after this long (1 to 110)                                                   |
+| Row limit               | `100`          | Rows shown for a query without its own `LIMIT` or `TOP` (results never exceed 5000 rows or about 900 KB) |
 
 ### Run from source
 
