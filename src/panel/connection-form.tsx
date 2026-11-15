@@ -1,9 +1,11 @@
 // The form to create, test, edit and delete a saved connection. C1, C2, C3
 import { Button, Callout, Card, Input, Row, read, Select, Stack, set } from 'orca'
+import type { SslMode } from '../drivers'
 import { DEFAULT_TONE, ENVIRONMENTS, TONES } from '../environment-label'
 import type { Environment, Tone } from '../protocol'
 import {
   closeForm,
+  DEFAULT_SSL,
   deleteFromForm,
   type Engine,
   editDraft,
@@ -15,6 +17,7 @@ import {
   saveForm,
   setEngine,
   setEnvironment,
+  setSsl,
   testForm,
 } from './connection-form-state'
 import { SqliteFields } from './sqlite-fields'
@@ -22,7 +25,15 @@ import { SqliteFields } from './sqlite-fields'
 const ENGINES = [
   { value: 'postgres', label: 'PostgreSQL' },
   { value: 'mysql', label: 'MySQL / MariaDB' },
+  { value: 'mssql', label: 'SQL Server' },
   { value: 'sqlite', label: 'SQLite' },
+]
+
+/** The three libpq modes that change how the connection is made, named as the URL names them. */
+const SSL_OPTIONS: { value: SslMode; label: string }[] = [
+  { value: 'disable', label: 'Not encrypted (sslmode=disable)' },
+  { value: 'require', label: 'Encrypted, certificate unchecked (sslmode=require)' },
+  { value: 'verify-full', label: 'Encrypted and certificate checked (sslmode=verify-full)' },
 ]
 
 /** Orca's Select drops an empty value, so "no environment" is a word of its own here. */
@@ -55,6 +66,14 @@ function ServerFields({ draft }: FormPartProps) {
         placeholder={draft.hasPassword ? 'Unchanged' : ''}
         onChange={(password) => set(formPassword, password)}
       />
+      {DEFAULT_SSL[draft.engine] === undefined ? null : (
+        <Select
+          label="Encryption"
+          value={draft.ssl ?? 'disable'}
+          options={SSL_OPTIONS}
+          onChange={(value) => setSsl(value as SslMode)}
+        />
+      )}
     </>
   )
 }

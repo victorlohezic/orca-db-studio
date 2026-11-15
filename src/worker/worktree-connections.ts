@@ -93,7 +93,7 @@ function targetOf(url: string | undefined): WorktreeTarget | undefined {
   if (!url || !parsed) return undefined
   const { password, engine, host, port, database, user, ssl } = parsed
   return {
-    config: { engine, host, port, database, user, ...(ssl === undefined ? {} : { ssl }) },
+    config: { engine, host, port, database, user, ...(ssl ? { ssl } : {}) },
     password: password || undefined,
     detail: `${user ? `${user}@` : ''}${host}:${port}${database ? `/${database}` : ''}`,
     url,
@@ -131,7 +131,7 @@ export async function resolveWorktree(
   const target = targetOf(await variableIn(workspace.path, ref.variable))
   if (!target) {
     throw new Error(
-      `${ref.variable} is not a PostgreSQL or MySQL URL in ${workspace.name}'s .env files`,
+      `${ref.variable} is not a PostgreSQL, MySQL or SQL Server URL in ${workspace.name}'s .env files`,
     )
   }
   return target

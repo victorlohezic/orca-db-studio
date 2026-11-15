@@ -1,4 +1,4 @@
-// Parsing a connection string, including how sslmode maps to the ssl flag. C2
+// Parsing a connection string, including how sslmode maps to the ssl mode. C2
 import { describe, expect, test } from 'vitest'
 import { parseConnectionString } from '../src/connection-string'
 
@@ -19,15 +19,21 @@ describe('parseConnectionString', () => {
     expect(parseConnectionString('postgres://u:p@h:5432/db')?.ssl).toBeUndefined()
   })
 
-  test.each(['require', 'prefer', 'verify-ca', 'verify-full'])(
-    'sslmode=%s turns ssl on',
+  test.each(['require', 'prefer'])(
+    'sslmode=%s encrypts without checking the certificate',
     (mode) => {
-      expect(parseConnectionString(`postgres://u:p@h:5432/db?sslmode=${mode}`)?.ssl).toBe(true)
+      expect(parseConnectionString(`postgres://u:p@h:5432/db?sslmode=${mode}`)?.ssl).toBe('require')
     },
   )
 
-  test('sslmode=disable turns ssl off', () => {
-    expect(parseConnectionString('postgres://u:p@h:5432/db?sslmode=disable')?.ssl).toBe(false)
+  test.each(['verify-ca', 'verify-full'])('sslmode=%s checks the certificate', (mode) => {
+    expect(parseConnectionString(`postgres://u:p@h:5432/db?sslmode=${mode}`)?.ssl).toBe(
+      'verify-full',
+    )
+  })
+
+  test('sslmode=disable stays plain', () => {
+    expect(parseConnectionString('postgres://u:p@h:5432/db?sslmode=disable')?.ssl).toBe('disable')
   })
 
   test('is undefined for a string this plugin does not understand', () => {

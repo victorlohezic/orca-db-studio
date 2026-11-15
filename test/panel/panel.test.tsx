@@ -479,6 +479,80 @@ describe('connection form', () => {
     expect(p.find({ label: 'Port' })?.props.value).toBe('3306')
   })
 
+  test('SQL Server starts on its port, encrypted with the certificate checked', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+    expect(p.find({ label: 'Encryption' })).toBeNull()
+    await p.select({ label: 'Engine' }, 'mssql')
+
+    expect(p.find({ label: 'Port' })?.props.value).toBe('1433')
+    expect(p.find({ label: 'Encryption' })?.props.value).toBe('verify-full')
+    await p.select({ label: 'Engine' }, 'postgres')
+    expect(p.find({ label: 'Encryption' })).toBeNull()
+  })
+
+  test('a sqlserver:// string selects SQL Server and its encryption', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+    await p.type(
+      { label: 'Connection string' },
+      'sqlserver://sa:pw@localhost/shop?encrypt=true&TrustServerCertificate=true',
+    )
+
+    expect(p.find({ label: 'Engine' })?.props.value).toBe('mssql')
+    expect(p.find({ label: 'Port' })?.props.value).toBe('1433')
+    expect(p.find({ label: 'Database' })?.props.value).toBe('shop')
+    expect(p.find({ label: 'Encryption' })?.props.value).toBe('require')
+    expect(p.find({ label: 'Password' })?.props.value).toBe('pw')
+  })
+
+  test('saves a SQL Server connection with its encryption', async () => {
+    let saved: unknown
+    const { p } = await mountWith({
+      'connection.save': (input: unknown) => {
+        saved = input
+        return PG
+      },
+    })
+
+    await p.press({ label: 'New connection' })
+    await p.type({ label: 'Connection string' }, 'mssql://sa@localhost:14330/shop')
+    await p.type({ label: 'Name' }, 'Local')
+    await p.press({ text: 'Save' })
+    expect(saved).toEqual({
+      form: {
+        name: 'Local',
+        engine: 'mssql',
+        host: 'localhost',
+        port: 14330,
+        database: 'shop',
+        user: 'sa',
+        ssl: 'verify-full',
+      },
+    })
+
+    await p.press({ label: 'New connection' })
+    await p.type({ label: 'Connection string' }, 'mssql://sa@localhost/shop?encrypt=false')
+    await p.type({ label: 'Name' }, 'Local')
+    await p.press({ text: 'Save' })
+    expect((saved as { form: Record<string, unknown> }).form).toMatchObject({ ssl: 'disable' })
+  })
+
+  test('editing a SQL Server connection saved unencrypted keeps it unencrypted', async () => {
+    const { p } = await mountWith({
+      'connection.get': {
+        form: { ...FORM, engine: 'mssql', port: 1433 },
+        hasPassword: true,
+      },
+    })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+
+    expect(p.find({ label: 'Encryption' })?.props.value).toBe('disable')
+  })
+
   test('saves the form values and the password through the worker', async () => {
     let saved: unknown
     const { p } = await mountWith({

@@ -2,7 +2,7 @@
 // buffered whole. Cancel runs pg_cancel_backend from a second connection; a timeout is the
 // server's statement_timeout, so the server ends the query itself.
 import type { ClientConfig, FieldDef } from 'pg'
-import type { ConnectionConfig, PostgresConfig } from '../common/config'
+import type { ConnectionConfig, PostgresConfig, SslMode } from '../common/config'
 import type { ColumnMeta, Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
 import { type ColumnRow, type ColumnTree, groupColumns, type SchemaTree } from '../common/schema'
 import { formatSize } from '../common/utils'
@@ -262,20 +262,33 @@ function hostNeedsSsl(host: string): boolean {
   )
 }
 
+/**
+ * `require` encrypts without requiring the server's CA locally, which matches how a desktop client
+ * reaches a managed database. `disable` passes false so the pg driver cannot re-enable SSL from a
+ * PGSSLMODE=require environment; only an unspecified mode stays undefined and lets pg decide.
+ */
+function pgSsl(mode: SslMode | undefined): ClientConfig['ssl'] {
+  switch (mode) {
+    case 'disable':
+      return false
+    case 'require':
+      return { rejectUnauthorized: false }
+    case 'verify-full':
+      return { rejectUnauthorized: true }
+    default:
+      return undefined
+  }
+}
+
 function clientConfig(config: PostgresConfig, secret: string | undefined): ClientConfig {
-  const ssl = config.ssl ?? hostNeedsSsl(config.host)
+  const mode = config.ssl ?? (hostNeedsSsl(config.host) ? 'require' : undefined)
   return {
     host: config.host,
     port: config.port,
     database: config.database,
     user: config.user,
     password: secret,
-    // SSL on -> rejectUnauthorized:false encrypts the connection without requiring the server's CA
-    // locally, which matches how a desktop client reaches a managed database. An explicit
-    // sslmode=disable (config.ssl === false) passes false through so the pg driver cannot re-enable
-    // SSL from a PGSSLMODE=require environment; only an unspecified mode (config.ssl === undefined
-    // on a non-managed host) stays undefined and lets the driver decide.
-    ssl: ssl ? { rejectUnauthorized: false } : config.ssl === false ? false : undefined,
+    ssl: pgSsl(mode),
   }
 }
 

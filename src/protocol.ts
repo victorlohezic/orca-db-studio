@@ -1,5 +1,5 @@
 // Typed UI <-> worker contract, imported by both sides.
-import type { ColumnTree, SchemaTree, SqlDialect } from './drivers'
+import type { ColumnTree, SchemaTree, SqlDialect, SslMode } from './drivers'
 
 export type {
   ColumnTree,
@@ -7,6 +7,7 @@ export type {
   SchemaNode,
   SchemaTree,
   SqlDialect,
+  SslMode,
   TableColumns,
 } from './drivers'
 
@@ -44,7 +45,7 @@ export interface ConnectionList {
 }
 
 /** The server engines the connection form offers. */
-export type ServerEngine = 'postgres' | 'mysql'
+export type ServerEngine = 'postgres' | 'mysql' | 'mssql'
 
 /** What the connection form edits for a server; the password travels beside it, never in it. */
 export interface ServerForm {
@@ -54,8 +55,8 @@ export interface ServerForm {
   port: number
   database: string
   user: string
-  /** SSL requested by a pasted URL's sslmode; absent lets the driver decide from the host. */
-  ssl?: boolean
+  /** Encryption asked for; unset is the same as `disable`. */
+  ssl?: SslMode
   label?: EnvironmentLabel
 }
 

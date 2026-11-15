@@ -20,8 +20,8 @@ export interface PostgresConfig {
   port: number
   database: string
   user: string
-  /** Connect over SSL. Undefined lets the driver decide from the host. */
-  ssl?: boolean
+  /** Where the connection was told to encrypt. Undefined lets the driver decide from the host. */
+  ssl?: SslMode
 }
 
 export interface MysqlConfig {

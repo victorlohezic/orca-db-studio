@@ -16,17 +16,17 @@ beforeEach(() => {
 describe('pasteConnectionString SSL', () => {
   test('carries sslmode=require into the draft', () => {
     pasteConnectionString('postgres://u:p@h.rds.amazonaws.com:5432/db?sslmode=require')
-    expect(read(formDraft)?.ssl).toBe(true)
+    expect(read(formDraft)?.ssl).toBe('require')
   })
 
   test('carries sslmode=disable into the draft', () => {
     pasteConnectionString('postgres://u:p@h:5432/db?sslmode=disable')
-    expect(read(formDraft)?.ssl).toBe(false)
+    expect(read(formDraft)?.ssl).toBe('disable')
   })
 
   test('a replacement URL without sslmode clears a previous override', () => {
     pasteConnectionString('postgres://u:p@h:5432/db?sslmode=disable')
-    expect(read(formDraft)?.ssl).toBe(false)
+    expect(read(formDraft)?.ssl).toBe('disable')
     pasteConnectionString('postgres://u:p@h.rds.amazonaws.com:5432/db')
     expect(read(formDraft)?.ssl).toBeUndefined()
   })

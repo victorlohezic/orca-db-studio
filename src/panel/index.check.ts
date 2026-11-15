@@ -48,6 +48,7 @@ const FILLED_FORM: FormDraft = {
   database: 'shop',
   user: 'app',
   path: '',
+  ssl: 'disable',
   environment: 'prod',
   tone: 'danger',
   notice: null,
@@ -137,6 +138,27 @@ export default defineCheck({
   },
   form: {
     persisted: { plugin: { 'connection-form': FILLED_FORM } },
+    requests: { 'connections.list': ALL },
+  },
+  'mssql-form': {
+    persisted: {
+      plugin: {
+        'connection-form': {
+          ...FILLED_FORM,
+          ref: undefined,
+          hasPassword: false,
+          name: 'Billing',
+          engine: 'mssql',
+          host: 'billing.database.windows.net',
+          port: '1433',
+          database: 'billing',
+          user: 'reader',
+          ssl: 'verify-full',
+          environment: 'staging',
+          tone: 'warning',
+        },
+      },
+    },
     requests: { 'connections.list': ALL },
   },
   'form-error': {

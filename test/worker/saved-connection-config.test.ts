@@ -1,4 +1,4 @@
-// configOf maps a cleaned form to a driver config, including the SSL flag a pasted sslmode set. C6
+// configOf maps a cleaned form to a driver config, including the SSL mode a pasted sslmode set. C6
 import { describe, expect, test } from 'vitest'
 import type { ServerForm } from '../../src/protocol'
 import { configOf } from '../../src/worker/saved-connections'
@@ -13,20 +13,26 @@ const base: ServerForm = {
 }
 
 describe('configOf SSL threading', () => {
-  test('carries ssl=true through for a Postgres connection', () => {
-    expect(configOf({ ...base, ssl: true })).toMatchObject({ engine: 'postgres', ssl: true })
+  test('carries ssl=require through for a Postgres connection', () => {
+    expect(configOf({ ...base, ssl: 'require' })).toMatchObject({
+      engine: 'postgres',
+      ssl: 'require',
+    })
   })
 
-  test('carries ssl=false through so an explicit disable is not re-enabled by the host default', () => {
-    expect(configOf({ ...base, ssl: false })).toMatchObject({ engine: 'postgres', ssl: false })
+  test('carries ssl=disable through so an explicit disable is not re-enabled by the host default', () => {
+    expect(configOf({ ...base, ssl: 'disable' })).toMatchObject({
+      engine: 'postgres',
+      ssl: 'disable',
+    })
   })
 
   test('leaves ssl absent when the form carries no sslmode', () => {
     expect(configOf(base)).not.toHaveProperty('ssl')
   })
 
-  test('drops a stray ssl on a non-Postgres engine', () => {
-    const mysql = { ...base, engine: 'mysql' as const, port: 3306, ssl: true }
+  test('drops a stray ssl on MySQL', () => {
+    const mysql = { ...base, engine: 'mysql' as const, port: 3306, ssl: 'require' as const }
     expect(configOf(mysql)).not.toHaveProperty('ssl')
   })
 })

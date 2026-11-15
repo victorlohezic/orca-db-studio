@@ -1,6 +1,7 @@
 // The connection form's draft and the worker requests behind its buttons. C1, C2, C3, X3
 import { atom, plugin, read, set, update } from 'orca'
 import { DEFAULT_PORTS, parseConnectionString } from '../connection-string'
+import type { SslMode } from '../drivers'
 import { DEFAULT_TONE } from '../environment-label'
 import {
   type ConnectionForm,
@@ -20,6 +21,17 @@ import {
 
 export type Engine = ConnectionForm['engine']
 
+/**
+ * The engines whose driver honours the Encryption field, and the mode a new connection starts on.
+ * SQL Server: Azure SQL refuses an unencrypted connection; a local Docker server needs `disable`.
+ */
+export const DEFAULT_SSL: Partial<Record<Engine, SslMode>> = { mssql: 'verify-full' }
+
+/** Undefined lets the driver decide: Postgres from the host, SQL Server as plain TCP. */
+function defaultSsl(engine: Engine): SslMode | undefined {
+  return DEFAULT_SSL[engine]
+}
+
 /** One draft for every engine: a server's fields and a SQLite file's path, each kept on a switch. */
 export interface FormDraft {
   /** Set when editing a saved connection. */
@@ -33,8 +45,11 @@ export interface FormDraft {
   database: string
   user: string
   path: string
-  /** SSL from a pasted URL's sslmode; absent until a string carries it. No form toggle yet. */
-  ssl?: boolean
+  /**
+   * Encryption for a server connection: the form's field for an engine in DEFAULT_SSL, a pasted
+   * string's otherwise. Undefined lets the driver decide.
+   */
+  ssl?: SslMode
   /** `''` is no environment, which leaves the color disabled. */
   environment: Environment | ''
   tone: Tone
@@ -72,6 +87,7 @@ function blankDraft(engine: Engine): FormDraft {
     database: '',
     user: '',
     path: '',
+    ssl: defaultSsl(engine),
     environment: '',
     tone: 'neutral',
     notice: null,
@@ -111,6 +127,11 @@ export async function openEditForm(ref: string): Promise<void> {
     set(formDraft, {
       ...blankDraft(form.engine),
       ...fields,
+      // A saved connection without the field keeps meaning what it did when saved: plain TCP
+      // behind an Encryption field, the driver's choice otherwise.
+      ssl:
+        (form.engine !== 'sqlite' && form.ssl) ||
+        (DEFAULT_SSL[form.engine] === undefined ? undefined : 'disable'),
       ...(label ? { environment: label.environment, tone: label.tone } : {}),
       ref,
       hasPassword,
@@ -141,10 +162,16 @@ export function setEngine(engine: Engine): void {
     // A port still at the old engine's default follows the engine; SQLite has no port of its own.
     const stale = !isServer(draft.engine) || draft.port === String(DEFAULT_PORTS[draft.engine])
     const port = isServer(engine) && stale ? String(DEFAULT_PORTS[engine]) : draft.port
+    // Encryption still at the old engine's default follows the engine too.
+    const ssl = draft.ssl === defaultSsl(draft.engine) ? defaultSsl(engine) : draft.ssl
     // A draft persisted before SQLite joined the form has no path.
     const path = draft.path ?? ''
-    return { ...draft, engine, port, path, notice: null }
+    return { ...draft, engine, port, ssl, path, notice: null }
   })
+}
+
+export function setSsl(ssl: SslMode): void {
+  editDraft({ ssl })
 }
 
 /** The environment brings its default color; the person can pick another one after. */
@@ -171,12 +198,15 @@ export function pasteConnectionString(text: string): void {
   const parsed = parseConnectionString(text)
   if (!parsed) return
   const { password, port, ssl, ...fields } = parsed
+  const draft = read(formDraft)
   // A string without a user or database must not wipe what the person typed.
   const present = Object.entries(fields).filter(([, value]) => value !== '')
-  // sslmode is carried through so a pasted require/disable reaches the driver, even on a
-  // non-managed host the default would not cover. It is always assigned, including undefined, so
-  // re-pasting a URL without sslmode clears a previous override and restores the host default.
-  editDraft({ ...Object.fromEntries(present), port: String(port), ssl })
+  // A string that says nothing of encryption keeps the form's choice, unless it changed the
+  // engine. Without a field, the last string's mode is cleared so the driver decides again.
+  const hasField = DEFAULT_SSL[parsed.engine] !== undefined
+  const kept =
+    hasField && draft && draft.engine === parsed.engine ? draft.ssl : defaultSsl(parsed.engine)
+  editDraft({ ...Object.fromEntries(present), port: String(port), ssl: ssl ?? kept })
   if (password) set(formPassword, password)
 }
 
@@ -185,9 +215,16 @@ function formOf(draft: FormDraft): ConnectionForm {
   // A draft persisted before labels joined the form has neither field.
   const label = environment ? { label: { environment, tone: tone ?? 'neutral' } } : {}
   if (!isServer(engine)) return { name, engine, path, ...label }
-  // sslmode travels only when a pasted URL set it; absent lets the driver decide from the host.
-  const sslField = ssl === undefined ? {} : { ssl }
-  return { name, engine, host, port: Number(port), database, user, ...sslField, ...label }
+  return {
+    name,
+    engine,
+    host,
+    port: Number(port),
+    database,
+    user,
+    ...label,
+    ...(ssl ? { ssl } : {}),
+  }
 }
 
 function input(draft: FormDraft) {
