@@ -508,6 +508,24 @@ describe('connection form', () => {
     expect(p.find({ label: 'Password' })?.props.value).toBe('pw')
   })
 
+  test('a JDBC SQL Server string fills every field, encryption included', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+    await p.type(
+      { label: 'Connection string' },
+      'jdbc:sqlserver://billing.database.windows.net:1433;database=billing;user=reader;password=s3cret;encrypt=true;trustServerCertificate=true;loginTimeout=30;',
+    )
+
+    expect(p.find({ label: 'Engine' })?.props.value).toBe('mssql')
+    expect(p.find({ label: 'Host' })?.props.value).toBe('billing.database.windows.net')
+    expect(p.find({ label: 'Port' })?.props.value).toBe('1433')
+    expect(p.find({ label: 'Database' })?.props.value).toBe('billing')
+    expect(p.find({ label: 'User' })?.props.value).toBe('reader')
+    expect(p.find({ label: 'Password' })?.props.value).toBe('s3cret')
+    expect(p.find({ label: 'Encryption' })?.props.value).toBe('require')
+  })
+
   test('saves a SQL Server connection with its encryption', async () => {
     let saved: unknown
     const { p } = await mountWith({
