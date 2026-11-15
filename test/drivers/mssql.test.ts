@@ -66,7 +66,17 @@ describe(IMAGE, () => {
     return Number(rows[0]?.[0])
   }
 
-  driverContract(IMAGE, { open, schema: 'dbo', slowQuery: SLOW })
+  driverContract(IMAGE, {
+    open,
+    schema: 'dbo',
+    slowQuery: SLOW,
+    dropConnection: {
+      idQuery: 'SELECT @@SPID',
+      async kill(id) {
+        await fetchAll(admin, `KILL ${Number(id)}`)
+      },
+    },
+  })
 
   describe(`${IMAGE} driver`, () => {
     let session: Session

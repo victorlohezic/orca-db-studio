@@ -31,7 +31,7 @@ function connectTo(
 ): Promise<MysqlConnection> {
   return new Promise((resolve, reject) => {
     const connection = mysql.createConnection(options)
-    // An idle connection dropped by the server must not crash the worker; the next call reports it.
+    // A connection the server dropped must not crash the worker; `closed` then says so.
     connection.on('error', () => undefined)
     connection.connect((error: Error | null) => {
       if (error) reject(error)
@@ -42,6 +42,11 @@ function connectTo(
 
 function endQuietly(connection: MysqlConnection): Promise<void> {
   return new Promise((resolve) => connection.end(() => resolve()))
+}
+
+/** mysql2 marks an error fatal when the connection is gone, and closes it for good. */
+function isFatal(error: unknown): boolean {
+  return (error as { fatal?: boolean } | null)?.fatal === true
 }
 
 function failureOf(error: Error & { errno?: number }): Error {
@@ -72,7 +77,7 @@ function startStatement(
   mysql: MysqlModule['mysql'],
   connection: MysqlConnection,
   sql: string,
-  onSettled: () => void,
+  onSettled: (error?: Error) => void,
 ): Promise<Statement> {
   const state: Statement = {
     columns: [],
@@ -122,7 +127,7 @@ function startStatement(
     query.on('error', (error: Error) => {
       state.failure = failureOf(error)
       state.settled = true
-      onSettled()
+      onSettled(error)
       reject(state.failure)
       notify()
     })
@@ -146,6 +151,7 @@ class MysqlSession implements Session {
   readonly dialect: 'mysql' | 'mariadb'
 
   #connection: MysqlConnection
+  #closed = false
   #timeoutMs = 0
   /** The query whose statement is on the server, which cancel may stop. */
   #running: string | undefined
@@ -158,11 +164,41 @@ class MysqlSession implements Session {
   ) {
     this.#connection = connection
     this.dialect = dialect
+    connection.on('end', () => {
+      this.#closed = true
+    })
+    connection.on('error', (error: Error) => this.#noteFailure(error))
+  }
+
+  get closed(): boolean {
+    return this.#closed
+  }
+
+  /** A fatal error, whether the connection or a command got it, means the connection is gone. */
+  #noteFailure(error: unknown): void {
+    if (isFatal(error)) this.#closed = true
+  }
+
+  /**
+   * mysql2 reports a command sent on a closed connection to the connection, not to a query
+   * without a callback, so a statement started now would wait forever.
+   */
+  #ensureOpen(): void {
+    if (this.#closed) throw new Error('The connection to the server was lost')
+  }
+
+  async #call<T>(sql: string): Promise<T> {
+    this.#ensureOpen()
+    try {
+      return await callbackQuery<T>(this.#connection, sql)
+    } catch (error) {
+      this.#noteFailure(error)
+      throw error
+    }
   }
 
   async listObjects(): Promise<SchemaTree> {
-    const rows = await callbackQuery<{ db: string; name: string | null; kind: string | null }[]>(
-      this.#connection,
+    const rows = await this.#call<{ db: string; name: string | null; kind: string | null }[]>(
       `SELECT s.schema_name AS db, t.table_name AS name, t.table_type AS kind
          FROM information_schema.schemata s
          LEFT JOIN information_schema.tables t ON t.table_schema = s.schema_name
@@ -183,18 +219,14 @@ class MysqlSession implements Session {
   }
 
   async listColumns(): Promise<ColumnTree> {
-    const rows = await callbackQuery<ColumnRow[]>(
-      this.#connection,
+    const rows = await this.#call<ColumnRow[]>(
       `SELECT c.table_schema AS \`schema\`, c.table_name AS name, c.column_name AS \`column\`
          FROM information_schema.columns c
         WHERE c.table_schema NOT IN (${SYSTEM_SCHEMAS.map((name) => `'${name}'`).join(', ')})
         ORDER BY c.table_schema, BINARY c.table_name, c.ordinal_position`,
     )
     // Null when the connection has no default database; nothing then completes unqualified.
-    const [current] = await callbackQuery<{ schema: string | null }[]>(
-      this.#connection,
-      'SELECT DATABASE() AS `schema`',
-    )
+    const [current] = await this.#call<{ schema: string | null }[]>('SELECT DATABASE() AS `schema`')
     return { defaultSchema: current?.schema ?? '', tables: groupColumns(rows) }
   }
 
@@ -207,15 +239,17 @@ class MysqlSession implements Session {
       this.dialect === 'mariadb'
         ? `max_statement_time = ${timeoutMs / 1000}`
         : `max_execution_time = ${timeoutMs}`
-    await callbackQuery(this.#connection, `SET SESSION ${setting}`)
+    await this.#call(`SET SESSION ${setting}`)
     this.#timeoutMs = timeoutMs
   }
 
   async query(sql: string, opts: QueryOptions): Promise<QueryCursor> {
     await this.#setTimeout(opts.timeoutMs ?? 0)
+    this.#ensureOpen()
     const connection = this.#connection
     this.#running = opts.queryId
-    const statement = await startStatement(this.mysql, connection, sql, () => {
+    const statement = await startStatement(this.mysql, connection, sql, (error) => {
+      this.#noteFailure(error)
       if (this.#running === opts.queryId) this.#running = undefined
     })
     const kill = () => this.#killQuery()
@@ -267,6 +301,9 @@ class MysqlSession implements Session {
   }
 
   async close(): Promise<void> {
+    // A connection that is gone never answers the goodbye.
+    if (this.#closed) return
+    this.#closed = true
     await endQuietly(this.#connection)
   }
 }

@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MSSQLServerContainer, type StartedMSSQLServerContainer } from '@testcontainers/mssqlserver'
 import { mockHost, mountWorker } from 'orca/testing'
-import { afterAll, beforeAll, expect, test } from 'vitest'
+import { afterAll, beforeAll, expect, test, vi } from 'vitest'
+import { loadDriver } from '../../src/drivers'
 import * as worker from '../../src/worker/index'
 
 let container: StartedMSSQLServerContainer
@@ -71,6 +72,27 @@ test('tests, saves, browses, queries and opens a table on a SQL Server connectio
   })
   expect(top.rows).toHaveLength(150)
   expect(top.truncated).toBe(false)
+
+  // The server drops the session's connection, as a restart or an idle timeout would.
+  /** The session's id, which SQL Server reuses, and its connection's, which it never does. */
+  async function connectionOf(): Promise<{ spid: number; id: string }> {
+    const { rows } = await w.request('query.run', {
+      ref,
+      sql: 'SELECT session_id, connection_id FROM sys.dm_exec_connections WHERE session_id = @@SPID',
+      documentId: 'd2',
+    })
+    return { spid: Number(rows[0]?.[0]), id: String(rows[0]?.[1]) }
+  }
+  const dropped = await connectionOf()
+  const driver = await loadDriver('mssql')
+  const admin = await driver.connect(form, password)
+  const kill = await admin.query(`KILL ${dropped.spid}`, { queryId: 'kill' })
+  await kill.close()
+  await admin.close()
+  // Once the client has seen the connection go, the next request opens a fresh session.
+  await vi.waitFor(async () => expect((await connectionOf()).id).not.toBe(dropped.id), {
+    timeout: 10_000,
+  })
 
   const wrong = { form, password: 'not-the-password' }
   await expect(w.request('connection.test', wrong)).rejects.toThrow(/Login failed/)

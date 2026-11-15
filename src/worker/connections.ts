@@ -92,19 +92,27 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     const target = await targetFor(orca, ref)
     // The .env changed since this session opened: it points somewhere else now.
     if (target.stamp !== undefined && stamps.get(ref) !== target.stamp) forget(ref)
-    let opened = sessions.get(ref)
-    if (!opened) {
-      opened = openSession(target)
-      sessions.set(ref, opened)
-      if (target.stamp !== undefined) stamps.set(ref, target.stamp)
-      // A failed connect is not cached: the next request tries again.
-      opened.catch(() => {
-        if (sessions.get(ref) === opened) {
-          sessions.delete(ref)
-          stamps.delete(ref)
-        }
-      })
+    const cached = sessions.get(ref)
+    if (cached) {
+      const session = await cached
+      if (!session.closed) return session
+      // The server dropped its connection (a restart, an idle timeout): open a fresh one.
+      if (sessions.get(ref) === cached) forget(ref)
     }
+    return sessions.get(ref) ?? cacheSession(ref, target)
+  }
+
+  function cacheSession(ref: string, target: Target): Promise<Session> {
+    const opened = openSession(target)
+    sessions.set(ref, opened)
+    if (target.stamp !== undefined) stamps.set(ref, target.stamp)
+    // A failed connect is not cached: the next request tries again.
+    opened.catch(() => {
+      if (sessions.get(ref) === opened) {
+        sessions.delete(ref)
+        stamps.delete(ref)
+      }
+    })
     return opened
   }
 

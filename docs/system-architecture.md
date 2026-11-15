@@ -95,6 +95,7 @@ interface Driver {
 }
 
 interface Session {
+  readonly closed: boolean // the server dropped the connection, or close() ran
   listObjects(): Promise<SchemaTree> // databases, schemas, tables, views
   listColumns(): Promise<ColumnTree> // every table and view with its columns, and the default schema
   query(sql: string, opts: QueryOptions): Promise<QueryCursor>
@@ -111,6 +112,8 @@ interface QueryCursor {
   close(): Promise<void>
 }
 ```
+
+The worker keeps one session per connection. A session whose connection the server dropped (a restart, an idle timeout) says it is `closed`, and the worker opens a fresh one on the next request; a statement running when the connection went fails.
 
 Engine notes:
 

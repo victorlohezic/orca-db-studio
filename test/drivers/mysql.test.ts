@@ -85,7 +85,17 @@ for (const flavour of FLAVOURS) {
       return Number(rows[0]?.n)
     }
 
-    driverContract(flavour.image, { open, schema: () => database, slowQuery: SLOW })
+    driverContract(flavour.image, {
+      open,
+      schema: () => database,
+      slowQuery: SLOW,
+      dropConnection: {
+        idQuery: 'SELECT CONNECTION_ID()',
+        async kill(id) {
+          await admin.query(`KILL ${Number(id)}`)
+        },
+      },
+    })
 
     describe(`${flavour.image} driver`, () => {
       let session: Session

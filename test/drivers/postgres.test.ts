@@ -57,7 +57,17 @@ for (const image of VERSIONS) {
       return rows[0].n
     }
 
-    driverContract(image, { open, schema: 'public', slowQuery: 'SELECT pg_sleep(30)' })
+    driverContract(image, {
+      open,
+      schema: 'public',
+      slowQuery: 'SELECT pg_sleep(30)',
+      dropConnection: {
+        idQuery: 'SELECT pg_backend_pid()',
+        async kill(id) {
+          await admin.query('SELECT pg_terminate_backend($1)', [id])
+        },
+      },
+    })
 
     describe(`${image} driver`, () => {
       let session: Session

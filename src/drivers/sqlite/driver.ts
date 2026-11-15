@@ -62,10 +62,16 @@ class SqliteSession implements Session {
   readonly dialect = 'sqlite'
 
   #thread: Thread | undefined
+  /** No server can drop a file: only `close()` closes the session. */
+  #closed = false
   /** Queries between `query()` and their cursor's close; cancel may stop any of them. */
   #running = new Set<string>()
 
   constructor(readonly path: string) {}
+
+  get closed(): boolean {
+    return this.#closed
+  }
 
   thread(): Thread {
     this.#thread ??= startThread(this.path)
@@ -147,6 +153,7 @@ class SqliteSession implements Session {
   }
 
   async close(): Promise<void> {
+    this.#closed = true
     const thread = this.#thread
     this.#thread = undefined
     thread?.stop(new Error('The SQLite session was closed'))

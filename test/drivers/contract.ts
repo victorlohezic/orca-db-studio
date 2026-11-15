@@ -1,5 +1,5 @@
 // Seam A: the driver contract, written once against the driver interface and run on every engine.
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Row, Session } from '../../src/drivers'
 
 export interface ContractTarget {
@@ -9,6 +9,12 @@ export interface ContractTarget {
   schema: string | (() => string)
   /** A statement that runs for several seconds before its first row, and that a cancel makes fail. */
   slowQuery: string
+  /** Servers only: ends a session's connection from the server side, as a restart would. */
+  dropConnection?: {
+    /** Run on the session: its connection id on the server. */
+    idQuery: string
+    kill(id: unknown): Promise<void>
+  }
 }
 
 async function run(session: Session, sql: string): Promise<Row[]> {
@@ -93,6 +99,28 @@ export function driverContract(name: string, target: ContractTarget): void {
       const rows = await run(session, session.tableQuery(name, 'items', 2))
       expect(rows).toHaveLength(2)
     })
+
+    test('says it is closed once closed', async () => {
+      const other = await target.open()
+      expect(other.closed).toBe(false)
+      await other.close()
+      expect(other.closed).toBe(true)
+    })
+
+    const drop = target.dropConnection
+    test.runIf(drop)(
+      'a session the server dropped says so, and every call on it fails',
+      async () => {
+        if (!drop) return
+        const [[id]] = (await run(session, drop.idQuery)) as [[unknown]]
+        await drop.kill(id)
+        await vi.waitFor(() => expect(session.closed).toBe(true), { timeout: 10_000 })
+        // Failing rather than waiting forever, and again on the next call.
+        await expect(run(session, 'SELECT 1')).rejects.toThrow()
+        await expect(run(session, 'SELECT 1')).rejects.toThrow()
+        await expect(session.listObjects()).rejects.toThrow()
+      },
+    )
 
     test('cancel stops a running query and the session keeps working', async () => {
       // Caught at once, and from query() too: a server may only answer once the statement is done.

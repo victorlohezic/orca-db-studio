@@ -21,6 +21,8 @@ export type Row = unknown[]
 
 export interface Session {
   readonly dialect: SqlDialect
+  /** True once the server dropped the connection or `close()` ran: the session never works again. */
+  readonly closed: boolean
   listObjects(): Promise<SchemaTree>
   listColumns(): Promise<ColumnTree>
   query(sql: string, opts: QueryOptions): Promise<QueryCursor>

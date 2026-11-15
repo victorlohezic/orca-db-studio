@@ -136,7 +136,7 @@ function connectTo(
 ): Promise<TediousConnection> {
   return new Promise((resolve, reject) => {
     const connection = new tedious.Connection(config)
-    // An idle connection dropped by the server must not crash the worker; the next call reports it.
+    // A connection the server dropped must not crash the worker; `closed` then says so.
     connection.on('error', () => undefined)
     connection.connect((error?: Error) => {
       if (!error) return resolve(connection)
@@ -274,6 +274,10 @@ class MssqlSession implements Session {
     connection: TediousConnection,
   ) {
     this.#connection = connection
+  }
+
+  get closed(): boolean {
+    return this.#connection.closed
   }
 
   /** Waits for the request ahead to end; the returned function lets the next one go. */

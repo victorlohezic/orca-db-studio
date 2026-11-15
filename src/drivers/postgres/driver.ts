@@ -94,6 +94,7 @@ class PostgresSession implements Session {
   readonly dialect = 'postgres'
 
   #client: PgClient
+  #closed = false
   #pid: number | undefined
   #timeoutMs = 0
   /** Type names by OID, read once at connect: a connection runs one statement at a time, so a cursor in flight blocks any later lookup. */
@@ -106,8 +107,16 @@ class PostgresSession implements Session {
     private readonly config: ClientConfig,
   ) {
     this.#client = new pg.pg.Client(config)
-    // An idle connection dropped by the server must not crash the worker; the next call reports it.
+    // A connection the server dropped must not crash the worker; `closed` then says so.
     this.#client.on('error', () => undefined)
+    // pg ends the client whenever its socket closes, whoever closed it.
+    this.#client.on('end', () => {
+      this.#closed = true
+    })
+  }
+
+  get closed(): boolean {
+    return this.#closed
   }
 
   async open(): Promise<void> {
@@ -247,6 +256,7 @@ class PostgresSession implements Session {
   }
 
   async close(): Promise<void> {
+    this.#closed = true
     await this.#client.end().catch(() => undefined)
   }
 }
