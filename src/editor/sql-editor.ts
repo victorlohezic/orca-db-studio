@@ -16,6 +16,7 @@ import {
   keymap,
   lineNumbers,
   MariaSQL,
+  MSSQL,
   MySQL,
   PostgreSQL,
   SQLite,
@@ -27,7 +28,13 @@ import type { CompletionSchema } from './sql-schema'
 import { sqlTheme } from './sql-theme'
 import type { TextChange } from './statements'
 
-const DIALECTS = { sqlite: SQLite, postgres: PostgreSQL, mysql: MySQL, mariadb: MariaSQL }
+const DIALECTS = {
+  sqlite: SQLite,
+  postgres: PostgreSQL,
+  mysql: MySQL,
+  mariadb: MariaSQL,
+  mssql: MSSQL,
+}
 
 export interface SqlEditorOptions {
   parent: HTMLElement

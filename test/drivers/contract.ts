@@ -66,7 +66,7 @@ export function driverContract(name: string, target: ContractTarget): void {
 
     test('fetches rows in batches until the cursor is done', async () => {
       await run(session, "INSERT INTO items (id, name) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
-      const cursor = await session.query('SELECT id, name, id FROM items ORDER BY id', {
+      const cursor = await session.query('SELECT id, name, id FROM items ORDER BY items.id', {
         queryId: 'select',
       })
       expect(cursor.columns.map((c) => c.name)).toEqual(['id', 'name', 'id'])

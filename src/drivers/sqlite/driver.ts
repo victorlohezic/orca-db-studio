@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads'
 import type { ConnectionConfig } from '../common/config'
 import type { Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
 import type { ColumnTree } from '../common/schema'
+import { formatSeconds } from '../common/utils'
 import type { ThreadOp, ThreadOps, ThreadReply } from './thread'
 
 const THREAD_URL = new URL('./thread.ts', import.meta.url)
@@ -18,11 +19,6 @@ interface Thread {
 interface Pending {
   resolve(value: unknown): void
   reject(error: Error): void
-}
-
-function formatSeconds(ms: number): string {
-  const seconds = Math.round(ms / 100) / 10
-  return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`
 }
 
 function startThread(path: string): Thread {

@@ -5,10 +5,12 @@ import type { Driver } from './common/driver'
 export type {
   ConnectionConfig,
   Engine,
+  MssqlConfig,
   MysqlConfig,
   PostgresConfig,
   SqlDialect,
   SqliteConfig,
+  SslMode,
 } from './common/config'
 export type {
   ColumnMeta,
@@ -25,11 +27,13 @@ export type {
   SchemaTree,
   TableColumns,
 } from './common/schema'
+export { isSslMode, SSL_MODES } from './common/ssl'
 export { formatSize } from './common/utils'
 
 const loaders: Record<Engine, () => Promise<Driver>> = {
   postgres: async () => (await import('./postgres/driver')).postgresDriver,
   mysql: async () => (await import('./mysql/driver')).mysqlDriver,
+  mssql: async () => (await import('./mssql/driver')).mssqlDriver,
   sqlite: async () => (await import('./sqlite/driver')).sqliteDriver,
 }
 

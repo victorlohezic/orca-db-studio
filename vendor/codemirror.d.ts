@@ -3,6 +3,7 @@ export { autocompletion, type CompletionSource, completionKeymap } from '@codemi
 export { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 export {
   MariaSQL,
+  MSSQL,
   MySQL,
   PostgreSQL,
   SQLite,

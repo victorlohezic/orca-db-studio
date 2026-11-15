@@ -90,9 +90,11 @@ export function statementAt(text: string, cursor: number): string | undefined {
 }
 
 // One quoted name, optionally schema-qualified: no joins, no lists, nothing the person wrote.
-const QUOTED_NAME = '(?:"(?:[^"\\n]|"")+"|`(?:[^`\\n]|``)+`)'
+const QUOTED_NAME = '(?:"(?:[^"\\n]|"")+"|`(?:[^`\\n]|``)+`|\\[(?:[^\\]\\n]|\\]\\])+\\])'
+const TABLE = `${QUOTED_NAME}(?:\\.${QUOTED_NAME})?`
+// What the drivers write: LIMIT n at the end, or SELECT TOP n on SQL Server.
 const TABLE_QUERY = new RegExp(
-  `^-- db-studio: connection=.+\\nSELECT \\* FROM ${QUOTED_NAME}(?:\\.${QUOTED_NAME})? LIMIT \\d+\\n?$`,
+  `^-- db-studio: connection=.+\\nSELECT (?:\\* FROM ${TABLE} LIMIT \\d+|TOP \\d+ \\* FROM ${TABLE})\\n?$`,
 )
 
 /** Whether the document is exactly what opening a table writes: safe to run on open. */

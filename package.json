@@ -39,6 +39,7 @@
     "@codemirror/view": "^6.43.15",
     "@lezer/highlight": "^1.2.5",
     "@testcontainers/mariadb": "^12.2.1",
+    "@testcontainers/mssqlserver": "^12.2.1",
     "@testcontainers/mysql": "^12.2.1",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/node": "^24.19.2",

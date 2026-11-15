@@ -100,6 +100,15 @@ describe('isTableQuery', () => {
     ).toBe(true)
   })
 
+  test('accepts the SQL Server form, with bracket-quoted names', () => {
+    expect(isTableQuery('-- db-studio: connection=c1\nSELECT TOP 100 * FROM [dbo].[t]\n')).toBe(
+      true,
+    )
+    expect(isTableQuery('-- db-studio: connection=c1\nSELECT TOP 100 * FROM [dbo].[a]]b]\n')).toBe(
+      true,
+    )
+  })
+
   test('refuses anything the person wrote, so it never runs on open', () => {
     expect(isTableQuery('-- db-studio: connection=/a.db\nDELETE FROM t')).toBe(false)
     expect(isTableQuery('-- db-studio: connection=/a.db\nSELECT * FROM big a, big b LIMIT 1')).toBe(
@@ -109,6 +118,9 @@ describe('isTableQuery', () => {
       isTableQuery('-- db-studio: connection=/a.db\nSELECT * FROM t LIMIT 1; DROP TABLE t'),
     ).toBe(false)
     expect(isTableQuery('SELECT * FROM t LIMIT 1')).toBe(false)
+    expect(isTableQuery('-- db-studio: connection=c1\nSELECT TOP 1 * FROM [a], [b]')).toBe(false)
+    expect(isTableQuery('-- db-studio: connection=c1\nSELECT TOP 1 * FROM [a]] DROP')).toBe(false)
+    expect(isTableQuery('-- db-studio: connection=c1\nSELECT TOP 1 * FROM [a] LIMIT 1')).toBe(false)
   })
 })
 
