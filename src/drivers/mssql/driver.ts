@@ -164,19 +164,30 @@ interface Statement {
 }
 
 function failureOf(error: Error & { code?: string }): Error {
-  return error.code === 'ECANCEL' ? new Error('Query cancelled', { cause: error }) : error
+  switch (error.code) {
+    case 'ECANCEL':
+      return new Error('Query cancelled', { cause: error })
+    // tedious only runs requests on a logged-in connection; a dropped one is in its final state.
+    case 'EINVALIDSTATE':
+      return new Error('The connection to SQL Server was lost', { cause: error })
+    default:
+      return error
+  }
 }
 
 /**
  * Starts the statement and resolves once the server has described its first result, or once it
  * has ended when it returns none. A batch may return several results: the first one is kept, as
  * the other engines run one statement per call.
+ *
+ * `onSettled` may run before this returns: tedious fails a request at once, inside `execSql`, when
+ * the connection is not logged in. It gets the statement for that reason.
  */
 function startStatement(
   tedious: TediousModule,
   connection: TediousConnection,
   sql: string,
-  onSettled: () => void,
+  onSettled: (statement: Statement) => void,
 ): { statement: Statement; described: Promise<void> } {
   let converters: Converter[] | undefined
   let laterResult = false
@@ -193,7 +204,7 @@ function startStatement(
     statement.rowCount = rowCount ?? 0
     if (error) statement.failure = statement.stopReason ?? failureOf(error)
     statement.settled = true
-    onSettled()
+    onSettled(statement)
     if (statement.failure) refuse(statement.failure)
     else describe()
     notify()
@@ -331,15 +342,16 @@ class MssqlSession implements Session {
     const release = await this.#turn()
     const connection = this.#connection
     let clearTimer: () => void = () => undefined
-    const { statement, described } = startStatement(this.tedious, connection, sql, () => {
+    const { statement, described } = startStatement(this.tedious, connection, sql, (settled) => {
       clearTimer()
-      if (this.#running?.statement === statement) this.#running = undefined
+      if (this.#running?.statement === settled) this.#running = undefined
       release()
     })
-    this.#running = { queryId: opts.queryId, statement }
+    // A statement that failed at once is over: nothing to cancel or time out.
+    if (!statement.settled) this.#running = { queryId: opts.queryId, statement }
     // The statement's whole life counts: running it, and every fetch until it ends.
     const timeoutMs = opts.timeoutMs ?? 0
-    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    if (!statement.settled && Number.isFinite(timeoutMs) && timeoutMs > 0) {
       const timer = setTimeout(() => {
         const reason = new Error(`Query timed out after ${formatSeconds(timeoutMs)}`)
         stopStatement(connection, statement, reason)
